@@ -17,11 +17,14 @@ use smithay_client_toolkit::{
             wl_shm, wl_surface,
         },
         client::{Attached, Main},
-        protocols::wlr::unstable::layer_shell::v1::client::{
-            zwlr_layer_shell_v1, zwlr_layer_surface_v1,
+        protocols::{
+            xdg_shell::client::xdg_toplevel,
+            wlr::unstable::layer_shell::v1::client::{
+                zwlr_layer_shell_v1, zwlr_layer_surface_v1,
+            },
         },
     },
-    seat,
+    seat::{self, keyboard},
     shm::DoubleMemPool,
     WaylandSource,
 };
@@ -106,6 +109,7 @@ impl Surface {
                 | zwlr_layer_surface_v1::Anchor::Right,
         );
         layer_surface.set_exclusive_zone(height as i32);
+        layer_surface.set_keyboard_interactivity(1);
 
         let next_render_event = Rc::new(Cell::new(None::<RenderEvent>));
         let next_render_event_handle = Rc::clone(&next_render_event);
@@ -389,9 +393,14 @@ fn main() {
         }
     };
 
+    let mut event_loop = calloop::EventLoop::<()>::new().unwrap();
+
     for seat in env.get_all_seats() {
-        if let Some(has_ptr) = seat::with_seat_data(&seat, |seat_data| {
-            seat_data.has_pointer && !seat_data.defunct
+        if let Some((has_ptr, has_keyboard)) = seat::with_seat_data(&seat, |seat_data| {
+            (
+                seat_data.has_pointer && !seat_data.defunct,
+                seat_data.has_keyboard && !seat_data.defunct,
+            )
         }) {
             if has_ptr {
                 let pointer = seat.get_pointer();
@@ -404,6 +413,21 @@ fn main() {
                         surface.1.handle_pointer_event(&event);
                     }
                 });
+            }
+
+            if has_keyboard {
+                match keyboard::map_keyboard_repeat(
+                    event_loop.handle(),
+                    &seat,
+                    None,
+                    keyboard::RepeatKind::System,
+                    move |event, _, _| print_keyboard_event(event),
+                ) {
+                    Ok((_kbd, _repeat_source)) => {}
+                    Err(e) => {
+                        eprintln!("Failed to map keyboard {:?}.", e);
+                    }
+                }
             }
         }
     }
@@ -419,8 +443,6 @@ fn main() {
     // The listener will live for as long as we keep this handle alive
     let _listner_handle =
         env.listen_for_outputs(move |output, info, _| output_handler(output, info));
-
-    let mut event_loop = calloop::EventLoop::<()>::new().unwrap();
 
     WaylandSource::new(queue)
         .quick_insert(event_loop.handle())
@@ -449,5 +471,36 @@ fn main() {
 
         display.flush().unwrap();
         event_loop.dispatch(None, &mut ()).unwrap();
+    }
+}
+
+fn print_keyboard_event(event: keyboard::Event) {
+    match event {
+        keyboard::Event::Enter { keysyms, .. } => {
+            println!("Gained focus on seat while {} keys pressed.", keysyms.len(),);
+        }
+        keyboard::Event::Leave { .. } => {
+            println!("Lost focus on seat.");
+        }
+        keyboard::Event::Key {
+            keysym,
+            state,
+            utf8,
+            ..
+        } => {
+            println!("Key {:?}: {:x} on seat.", state, keysym);
+            if let Some(txt) = utf8 {
+                println!(" -> Received text \"{}\".", txt);
+            }
+        }
+        keyboard::Event::Modifiers { modifiers } => {
+            println!("Modifiers changed to {:?} on seat.", modifiers);
+        }
+        keyboard::Event::Repeat { keysym, utf8, .. } => {
+            println!("Key repetition {:x} on seat.", keysym);
+            if let Some(txt) = utf8 {
+                println!(" -> Received text \"{}\".", txt);
+            }
+        }
     }
 }
