@@ -29,7 +29,7 @@ use smithay_client_toolkit::{
 use std::{
     cell::{Cell, RefCell},
     env,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     process::{self, Command},
     rc::Rc,
 };
@@ -348,7 +348,7 @@ impl ClickTarget {
 }
 
 fn main() {
-    let args = match args::parse(env::args()) {
+    let mut args = match args::parse(env::args()) {
         Ok(args) => args,
         Err(message) => {
             eprintln!("{}", message);
@@ -357,8 +357,17 @@ fn main() {
         }
     };
 
+    if args.detailed_message {
+        let result = io::stdin().read_to_string(&mut args.detailed_message_contents);
+
+        // Don't fail if we can't read this into a string, just print a message
+        // for debugging purposes.
+        if let Err(e) = result {
+            eprintln!("WARN: failed to read detailed message from stdin {}", e);
+        }
+    }
+
     // TODO
-    // read from stdin if passed --detailed-message arg
     // handle type warn vs error
 
     let (env, display, queue) =

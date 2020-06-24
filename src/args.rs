@@ -4,6 +4,7 @@ pub struct Args {
     pub buttons: Vec<ArgButton>,
     pub message_type: String,
     pub detailed_message: bool,
+    pub detailed_message_contents: String,
 }
 
 #[derive(Clone)]
@@ -66,6 +67,9 @@ pub fn parse(args: impl Iterator<Item = String>) -> Result<Args, String> {
             buttons,
             message_type: message_type.unwrap_or_else(|| "error".into()),
             detailed_message,
+            // This will be read from stdin later if the detailed message
+            // flag was passed.
+            detailed_message_contents: String::new(),
         })
     } else {
         Err("missing required arg message (-m/--message)".into())
