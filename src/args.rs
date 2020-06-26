@@ -5,6 +5,7 @@ pub struct Args {
     pub message_type: String,
     pub detailed_message: bool,
     pub detailed_message_contents: String,
+    pub window_type: WindowType,
 }
 
 #[derive(Clone)]
@@ -13,17 +14,38 @@ pub struct ArgButton {
     pub action: String,
 }
 
+#[derive(Clone, PartialEq)]
+pub enum WindowType {
+    /// swaynag style bar
+    Bar,
+    /// Standard window, often configured by the user to float
+    Window,
+}
+
 pub fn parse(args: impl Iterator<Item = String>) -> Result<Args, String> {
     let mut message = None;
     let mut message_type = None;
     let mut buttons = vec![];
     let mut detailed_message = false;
+    // default to Bar window type for swaynag compatibility
+    let mut window_type = WindowType::Bar;
 
     // skip the binary name
     let mut args = args.skip(1);
 
     loop {
+        // TODO update parsing so waysay args go first, then --, then swaynag args
         match args.next().as_deref() {
+            Some("--window-type") => {
+                let window_type_arg = args.next();
+
+                match window_type_arg.as_deref() {
+                    Some("bar") => window_type = WindowType::Bar,
+                    Some("window") => window_type = WindowType::Window,
+                    Some(x) => return Err(format!("invalid window type: {}", x)),
+                    None => return Err("missing required arg message (-m/--message)".into()),
+                }
+            }
             Some("-m") | Some("--message") => {
                 let message_arg = args.next();
 
@@ -70,6 +92,7 @@ pub fn parse(args: impl Iterator<Item = String>) -> Result<Args, String> {
             // This will be read from stdin later if the detailed message
             // flag was passed.
             detailed_message_contents: String::new(),
+            window_type,
         })
     } else {
         Err("missing required arg message (-m/--message)".into())
