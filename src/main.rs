@@ -22,7 +22,7 @@ use smithay_client_toolkit::{
     },
     seat::{
         self,
-        keyboard::{map_keyboard_repeat, RepeatKind},
+        keyboard::{self, map_keyboard_repeat, RepeatKind},
     },
     shm::DoubleMemPool,
     window::{self, ConceptFrame},
@@ -534,8 +534,9 @@ fn main() {
                         &seat,
                         None,
                         RepeatKind::System,
-                        // TODO handle key here
-                        move |_event, _, _| {},
+                        move |event, _, _| {
+                            handle_kdb_event(event);
+                        },
                     ) {
                         Ok((kbd, repeat_source)) => {
                             seats.push((name, Some((kbd, repeat_source))));
@@ -572,7 +573,9 @@ fn main() {
                         &seat,
                         None,
                         RepeatKind::System,
-                        move |_event, _, _| {}, // TODO handle key
+                        move |event, _, _| {
+                            handle_kdb_event(event);
+                        },
                     ) {
                         Ok((kbd, repeat_source)) => {
                             *opt_kbd = Some((kbd, repeat_source));
@@ -630,4 +633,33 @@ fn main() {
             event_loop.dispatch(None, &mut next_action).unwrap();
         }
     };
+}
+
+fn handle_kdb_event(event: keyboard::Event) {
+    match event {
+        keyboard::Event::Enter { keysyms, .. } => {
+            println!("Gained focus while {} keys pressed.", keysyms.len(),);
+        }
+        keyboard::Event::Leave { .. } => {}
+        keyboard::Event::Key {
+            keysym,
+            state,
+            utf8,
+            ..
+        } => {
+            println!("Key {:?}: {:x}", state, keysym);
+            if let Some(txt) = utf8 {
+                println!(" -> Received text \"{}\".", txt);
+            }
+        }
+        keyboard::Event::Modifiers { modifiers } => {
+            println!("Modifiers changed to {:?}", modifiers);
+        }
+        keyboard::Event::Repeat { keysym, utf8, .. } => {
+            println!("Key repetition {:x}", keysym);
+            if let Some(txt) = utf8 {
+                println!(" -> Received text \"{}\".", txt);
+            }
+        }
+    }
 }
